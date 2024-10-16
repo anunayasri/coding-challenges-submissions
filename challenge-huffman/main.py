@@ -77,19 +77,26 @@ def build_freq_table(data: str) -> Dict[str, int]:
 
 def decode_text(data: str) -> str:
     # read freq_table from header
-    parts = data.split('\n\n')
-    if len(parts) != 2:
+    # parts = data.split(b'\n\n')
+    split_pos = data.find(b'\n\n')
+    if split_pos == -1:
         raise ValueError('Data is improperly encoded')
 
-    header, encoded_data = parts[0], parts[1]
+    header, encoded_data_bytes = data[:split_pos].decode('utf-8'), data[split_pos+2:]
 
     freq_table = json.loads(header)
 
     root = build_huffman_tree(freq_table)
 
+    encoded_data_bits = ''
+    for byte in encoded_data_bytes:
+        bits = format(int(byte), '08b')
+        encoded_data_bits += bits
+
+
     decoded_data = ''
     curr = root
-    for bit in encoded_data:
+    for bit in encoded_data_bits:
         if bit == '0':
             curr = curr.left
         else:
@@ -102,12 +109,13 @@ def decode_text(data: str) -> str:
     return decoded_data
 
 
-def write_encoded_data(data: str, freq_table, filename: str):
-    header = json.dumps(freq_table)
-    with open(filename, 'w') as file:
+def write_encoded_data(binary_str: str, freq_table, filename: str):
+    header = json.dumps(freq_table).encode('utf-8')
+    byte_arr = int(binary_str, 2).to_bytes((len(binary_str)+7)//8)
+    with open(filename, 'wb') as file:
         file.write(header)
-        file.write('\n\n')
-        file.write(data)
+        file.write(b'\n\n')
+        file.write(byte_arr)
 
 
 def write_decoded_data(data: str, filename: str):
@@ -134,16 +142,22 @@ if __name__ == '__main__':
         print(f"ERROR: File {infile} is not readable.")
         sys.exit(1)
 
-    data: str = ''
-    with open(infile, 'r') as file:
-        data = file.read()
-
     if action == 'encode':
+        # file in utf-8 encoded text file
+        data: str = ''
+        with open(infile, 'r') as file:
+            data = file.read()
+
         encoded_text, freq_table = encode_text(data)
         write_encoded_data(encoded_text, freq_table, outfile)
         sys.exit(0)
 
     if action == 'decode':
+        # binary file
+        data: str = ''
+        with open(infile, 'rb') as file:
+            data = file.read()
+
         decoded_text = decode_text(data)
         write_decoded_data(decoded_text, outfile)
         sys.exit(0)
